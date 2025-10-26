@@ -702,41 +702,32 @@ export class RssDashboardView extends ItemView {
         this.plugin.saveSettings();
         this.render();
     }
-    
 
     private async handleArticleClick(article: FeedItem): Promise<void> {
         this.selectedArticle = article;
-        
+
         if (!article.read) {
             await this.updateArticleStatus(article, { read: true }, false);
         }
-        
-        
+
         if (article.saved) {
-            const loadingNotice = new Notice("Opening saved article...", 0);
             try {
                 const savedFile = await this.findSavedArticleFile(article);
                 if (savedFile) {
                     await this.openSavedArticleFile(savedFile);
-                    loadingNotice.hide();
                     return;
                 } else {
-                    
                     await this.updateArticleStatus(article, { saved: false }, false);
                     if (article.tags) {
                         article.tags = article.tags.filter(tag => tag.name.toLowerCase() !== "saved");
                     }
-                    loadingNotice.hide();
                     new Notice("Saved article file not found. Opening original source instead.");
                 }
             } catch (error) {
-                loadingNotice.hide();
-                
                 new Notice(`Error opening saved article: ${error.message}`);
             }
         }
-        
-        
+
         const readerLeaves = this.app.workspace.getLeavesOfType(RSS_READER_VIEW_TYPE);
         const podcastPlaying = readerLeaves.some(leaf => {
             const view = leaf.view as any;
@@ -1135,14 +1126,10 @@ export class RssDashboardView extends ItemView {
     
     private async openSavedArticleFile(file: TFile): Promise<void> {
         try {
-            
             const leaf = this.app.workspace.getLeaf("tab");
             await leaf.openFile(file);
             this.app.workspace.revealLeaf(leaf);
-            
-            new Notice(`Opened saved article: ${file.basename}`);
         } catch (error) {
-            
             new Notice(`Error opening saved article: ${error.message}`);
         }
     }
@@ -1167,31 +1154,19 @@ export class RssDashboardView extends ItemView {
             new Notice("Article is not saved locally");
             return;
         }
-        
-        
-        const loadingNotice = new Notice("Opening saved article...", 0);
-        
+
         try {
             const savedFile = await this.findSavedArticleFile(article);
             if (savedFile) {
                 await this.openSavedArticleFile(savedFile);
-                loadingNotice.hide();
             } else {
-                
-                
                 await this.updateArticleStatus(article, { saved: false }, false);
-                
-                
                 if (article.tags) {
                     article.tags = article.tags.filter(tag => tag.name.toLowerCase() !== "saved");
                 }
-                
-                loadingNotice.hide();
                 new Notice("Saved article file not found. Article status updated.");
             }
         } catch (error) {
-            loadingNotice.hide();
-            
             new Notice(`Error opening saved article: ${error.message}`);
         }
     }

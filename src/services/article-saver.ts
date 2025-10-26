@@ -478,34 +478,20 @@ guid: "{{guid}}"
         customTemplate?: string
     ): Promise<TFile | null> {
         try {
-            
-            const loadingNotice = new Notice("Fetching full article content...", 0);
-            
-            
             const fullContent = await this.fetchFullArticleContent(item.link);
-            
             if (!fullContent) {
-                loadingNotice.hide();
-                new Notice("Could not fetch full content. Saving with available content.");
+                console.log("Could not fetch full content. Saving with available content.");
                 return await this.saveArticle(item, customFolder, customTemplate);
             }
-            
-            
+
             const markdownContent = this.turndownService.turndown(fullContent);
-            
-            loadingNotice.hide();
-            
-            
             return await this.saveArticle(item, customFolder, customTemplate, markdownContent);
         } catch (error) {
-            
             new Notice(`Error saving article with full content: ${error.message}`);
-            
             return await this.saveArticle(item, customFolder, customTemplate);
         }
     }
-    
-    
+
     async saveArticle(
         item: FeedItem, 
         customFolder?: string, 
