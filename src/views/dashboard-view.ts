@@ -847,19 +847,16 @@ export class RssDashboardView extends ItemView {
             : await this.saver.saveArticle(article);
         
         if (file) {
-            
-            await this.updateArticleStatus(article, { saved: true }, false);
-            
-            
-            this.updateArticleSaveButton(article.guid);
-            
-            
-            
+            await this.updateArticleStatus(article, {
+                saved: true,
+                savedFilePath: article.savedFilePath,
+                tags: article.tags
+            }, false);
         }
     }
     
     
-    private async updateArticleStatus(article: FeedItem, updates: Partial<FeedItem>, shouldRerender = true): Promise<void> {
+    async updateArticleStatus(article: FeedItem, updates: Partial<FeedItem>, shouldRerender = true): Promise<void> {
         
         const feed = this.settings.feeds.find((f: any) => f.url === article.feedUrl);
         
@@ -885,20 +882,12 @@ export class RssDashboardView extends ItemView {
         
         await this.plugin.saveSettings();
 
-        
+        if (this.articleList && !shouldRerender) {
+            this.articleList.updateArticleUI(article, updates);
+        }
+
         if (shouldRerender) {
             this.render();
-        }
-    }
-    
-    
-    public updateArticleSaveButton(articleGuid: string): void {
-        const articleEl = document.getElementById(`article-${articleGuid}`);
-        if (articleEl) {
-            const saveButton = articleEl.querySelector('.rss-dashboard-save-toggle');
-            if (saveButton) {
-                saveButton.classList.add('saved');
-            }
         }
     }
     
@@ -1262,13 +1251,12 @@ export class RssDashboardView extends ItemView {
     }
 
     
-    private handleFileDeleted(file: TFile): void {
-        
+    private async handleFileDeleted(file: TFile): Promise<void> {
         const allArticles = this.getAllArticles();
+        await this.saver.checkSavedArticles(allArticles);
         const affectedArticles = allArticles.filter(article => 
             article.saved && article.savedFilePath === file.path
         );
-        
         
         affectedArticles.forEach(article => {
             article.saved = false;
@@ -1278,12 +1266,15 @@ export class RssDashboardView extends ItemView {
             if (article.tags) {
                 article.tags = article.tags.filter(tag => tag.name.toLowerCase() !== "saved");
             }
+
+            if (this.articleList) {
+                this.updateArticleStatus(article, {
+                    saved: false,
+                    savedFilePath: undefined,
+                    tags: article.tags
+                }, false);
+            }
         });
-        
-        
-        if (affectedArticles.length > 0) {
-            this.render();
-        }
     }
 
     

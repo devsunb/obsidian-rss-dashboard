@@ -327,7 +327,11 @@ export default class RssDashboardPlugin extends Plugin {
                     
                     
                     if (this.view) {
-                        this.view.updateArticleSaveButton(item.guid);
+						this.view.updateArticleStatus(
+							originalItem,
+							{ saved: true, savedFilePath: item.savedFilePath, tags: originalItem.tags },
+							false,
+						);
                     }
                 }
             }

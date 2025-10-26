@@ -332,6 +332,115 @@ export class ArticleList {
         if (this.container) this.container.scrollTop = prevScroll;
     }
 
+    /**
+     * Create a read toggle with proper event handling that always uses latest article data
+     */
+    private createReadToggle(article: FeedItem): HTMLElement {
+        const readToggle = document.createElement('div');
+        readToggle.className = `rss-dashboard-read-toggle ${article.read ? "read" : "unread"}`;
+
+        setIcon(readToggle, article.read ? "check-circle" : "circle");
+
+        readToggle.addEventListener("click", (e) => {
+            e.stopPropagation();
+
+            // Always get the latest article data
+            const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+
+            this.callbacks.onArticleUpdate(latestArticle, { read: !latestArticle.read }, false);
+        });
+
+        return readToggle;
+    }
+
+    /**
+     * Create a star toggle with proper event handling that always uses latest article data
+     */
+    private createStarToggle(article: FeedItem): HTMLElement {
+        const starToggle = document.createElement('div');
+        starToggle.className = `rss-dashboard-star-toggle ${article.starred ? "starred" : "unstarred"}`;
+
+        const starIcon = document.createElement('span');
+        starIcon.className = 'rss-dashboard-star-icon';
+        starToggle.appendChild(starIcon);
+
+        setIcon(starIcon, article.starred ? "lucide-star" : "lucide-star-off");
+        if (!starIcon.querySelector('svg')) {
+            starIcon.textContent = article.starred ? '★' : '☆';
+        }
+
+        starToggle.addEventListener("click", (e) => {
+            e.stopPropagation();
+
+            // Always get the latest article data
+            const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+
+            this.callbacks.onArticleUpdate(latestArticle, { starred: !latestArticle.starred }, false);
+        });
+
+        return starToggle;
+    }
+
+    /**
+     * Create a save button with proper event handling that always uses latest article data
+     */
+    private createSaveButton(article: FeedItem): HTMLElement {
+        const saveButton = document.createElement('div');
+        saveButton.className = `rss-dashboard-save-toggle ${article.saved ? "saved" : ""}`;
+        saveButton.setAttribute('title', article.saved
+            ? "Click to open saved article"
+            : this.settings.articleSaving.saveFullContent
+                ? "Save full article content to notes"
+                : "Save article summary to notes"
+        );
+
+        setIcon(saveButton, "lucide-save");
+        if (!saveButton.querySelector('svg')) {
+            saveButton.textContent = '💾';
+        }
+
+        saveButton.addEventListener("click", async (e) => {
+            e.stopPropagation();
+
+            // Always get the latest article data
+            const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+
+            if (latestArticle.saved) {
+                // Open saved article
+                if (this.callbacks.onOpenSavedArticle) {
+                    await this.callbacks.onOpenSavedArticle(latestArticle);
+                } else {
+                    new Notice("Article already saved. Look in your notes.");
+                }
+            } else {
+                // Save article
+                if (this.callbacks.onArticleSave) {
+                    // Prevent double-clicking
+                    if (saveButton.classList.contains('saving')) {
+                        return;
+                    }
+
+                    // Show saving state
+                    saveButton.classList.add('saving');
+                    saveButton.setAttribute('title', 'Saving article...');
+
+                    try {
+                        await this.callbacks.onArticleSave(latestArticle);
+                        // UI update is handled by updateArticleUI after save completes
+                    } catch (error) {
+                        new Notice(`Error saving article: ${error.message}`);
+                        saveButton.classList.remove('saving');
+                        saveButton.setAttribute('title', this.settings.articleSaving.saveFullContent
+                            ? 'Save full article content to notes'
+                            : 'Save article summary to notes');
+                    }
+                }
+            }
+        });
+
+        return saveButton;
+    }
+
     private groupArticles(articles: FeedItem[], groupBy: 'feed' | 'date' | 'folder' | 'none'): Record<string, FeedItem[]> {
         if (groupBy === 'none') return { 'All Articles': articles };
 
@@ -404,97 +513,15 @@ export class ArticleList {
             
             const actionToolbar = secondRow.createDiv('rss-dashboard-action-toolbar rss-dashboard-list-toolbar');
 
-            
-            const saveButton = actionToolbar.createDiv({
-                cls: `rss-dashboard-save-toggle ${article.saved ? "saved" : ""}`,
-                attr: { 
-                    title: article.saved 
-                        ? "Click to open saved article" 
-                        : this.settings.articleSaving.saveFullContent 
-                            ? "Save full article content to notes" 
-                            : "Save article summary to notes"
-                }
-            });
-            setIcon(saveButton, "lucide-save");
-            if (!saveButton.querySelector('svg')) {
-                saveButton.textContent = '💾';
-            }
-            saveButton.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                if (article.saved) {
-                    
-                    if (this.callbacks.onOpenSavedArticle) {
-                        await this.callbacks.onOpenSavedArticle(article);
-                    } else {
-                        new Notice("Article already saved. Look in your notes.");
-                    }
-                } else {
-                    if (this.callbacks.onArticleSave) {
-                        
-                        if (saveButton.classList.contains('saving')) {
-                            return;
-                        }
-                        
-                        
-                        saveButton.classList.add('saving');
-                        saveButton.setAttribute('title', 'Saving article...');
-                        
-                        try {
-                            await this.callbacks.onArticleSave(article);
-                            saveButton.classList.add("saved");
-                            setIcon(saveButton, "lucide-save");
-                            if (!saveButton.querySelector('svg')) {
-                                saveButton.textContent = '💾';
-                            }
-                        } catch (error) {
-                            
-                            new Notice(`Error saving article: ${error.message}`);
-                        } finally {
-                            
-                            saveButton.classList.remove('saving');
-                            saveButton.setAttribute('title', 'Click to open saved article');
-                        }
-                    }
-                }
-            });
+            // Create action buttons using reusable methods
+            const saveButton = this.createSaveButton(article);
+            actionToolbar.appendChild(saveButton);
 
-            
-            const readToggle = actionToolbar.createDiv({
-                cls: `rss-dashboard-read-toggle ${article.read ? "read" : "unread"}`,
-            });
-            setIcon(readToggle, article.read ? "check-circle" : "circle");
-            readToggle.addEventListener("click", (e) => {
-                e.stopPropagation();
-                this.callbacks.onArticleUpdate(article, { read: !article.read }, false);
-                readToggle.classList.toggle("read", !readToggle.classList.contains("read"));
-                readToggle.classList.toggle("unread", !readToggle.classList.contains("unread"));
-                setIcon(readToggle, article.read ? "check-circle" : "circle");
-            });
+            const readToggle = this.createReadToggle(article);
+            actionToolbar.appendChild(readToggle);
 
-            
-            const starToggle = actionToolbar.createDiv({
-                cls: `rss-dashboard-star-toggle ${article.starred ? "starred" : "unstarred"}`,
-            });
-            const starIcon = document.createElement('span');
-            starIcon.className = 'rss-dashboard-star-icon';
-            starToggle.appendChild(starIcon);
-            setIcon(starIcon, article.starred ? "lucide-star" : "lucide-star-off");
-            if (!starIcon.querySelector('svg')) {
-                starIcon.textContent = article.starred ? '★' : '☆';
-            }
-            starToggle.addEventListener("click", (e) => {
-                e.stopPropagation();
-                this.callbacks.onArticleUpdate(article, { starred: !article.starred }, false);
-                starToggle.classList.toggle("starred", !starToggle.classList.contains("starred"));
-                starToggle.classList.toggle("unstarred", !starToggle.classList.contains("unstarred"));
-                const iconEl = starToggle.querySelector('.rss-dashboard-star-icon');
-                if (iconEl) {
-                    setIcon(iconEl as HTMLElement, article.starred ? "lucide-star" : "lucide-star-off");
-                    if (!iconEl.querySelector('svg')) {
-                        iconEl.textContent = article.starred ? '★' : '☆';
-                    }
-                }
-            });
+            const starToggle = this.createStarToggle(article);
+            actionToolbar.appendChild(starToggle);
 
             
             const tagsDropdown = actionToolbar.createDiv({
@@ -619,13 +646,15 @@ export class ArticleList {
                 });
             }
 
-            
             articleEl.addEventListener("click", () => {
-                this.callbacks.onArticleClick(article);
+                // Always use the latest article data from this.articles
+                const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+                this.callbacks.onArticleClick(latestArticle);
             });
             articleEl.addEventListener("contextmenu", (e) => {
                 e.preventDefault();
-                this.showArticleContextMenu(e, article);
+                const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+                this.showArticleContextMenu(e, latestArticle);
             });
         }
     }
@@ -738,95 +767,16 @@ export class ArticleList {
             const actionToolbar = cardContent.createDiv({
                 cls: "rss-dashboard-action-toolbar",
             });
-            
-            const saveButton = actionToolbar.createDiv({
-                cls: `rss-dashboard-save-toggle ${article.saved ? "saved" : ""}`,
-                attr: { 
-                    title: article.saved 
-                        ? "Click to open saved article" 
-                        : this.settings.articleSaving.saveFullContent 
-                            ? "Save full article content to notes" 
-                            : "Save article summary to notes"
-                }
-            });
-            setIcon(saveButton, "lucide-save");
-            if (!saveButton.querySelector('svg')) {
-                saveButton.textContent = '💾';
-            }
-            saveButton.addEventListener("click", async (e) => {
-                e.stopPropagation();
-                if (article.saved) {
-                    
-                    if (this.callbacks.onOpenSavedArticle) {
-                        await this.callbacks.onOpenSavedArticle(article);
-                    } else {
-                        new Notice("Article already saved. Look in your notes.");
-                    }
-                } else {
-                    if (this.callbacks.onArticleSave) {
-                        
-                        if (saveButton.classList.contains('saving')) {
-                            return;
-                        }
-                        
-                        
-                        saveButton.classList.add('saving');
-                        saveButton.setAttribute('title', 'Saving article...');
-                        
-                        try {
-                            await this.callbacks.onArticleSave(article);
-                            saveButton.classList.add("saved");
-                            setIcon(saveButton, "lucide-save");
-                            if (!saveButton.querySelector('svg')) {
-                                saveButton.textContent = '💾';
-                            }
-                        } catch (error) {
-                            
-                            new Notice(`Error saving article: ${error.message}`);
-                        } finally {
-                            
-                            saveButton.classList.remove('saving');
-                            saveButton.setAttribute('title', 'Click to open saved article');
-                        }
-                    }
-                }
-            });
-            
-            const readToggle = actionToolbar.createDiv({
-                cls: `rss-dashboard-read-toggle ${article.read ? "read" : "unread"}`,
-            });
-            setIcon(readToggle, article.read ? "check-circle" : "circle");
-            readToggle.addEventListener("click", (e) => {
-                e.stopPropagation();
-                this.callbacks.onArticleUpdate(article, { read: !article.read }, false);
-                readToggle.classList.toggle("read", !readToggle.classList.contains("read"));
-                readToggle.classList.toggle("unread", !readToggle.classList.contains("unread"));
-                setIcon(readToggle, article.read ? "check-circle" : "circle");
-            });
-            
-            const starToggle = actionToolbar.createDiv({
-                cls: `rss-dashboard-star-toggle ${article.starred ? "starred" : "unstarred"}`,
-            });
-            const starIcon = document.createElement('span');
-            starIcon.className = 'rss-dashboard-star-icon';
-            starToggle.appendChild(starIcon);
-            setIcon(starIcon, article.starred ? "lucide-star" : "lucide-star-off");
-            if (!starIcon.querySelector('svg')) {
-                starIcon.textContent = article.starred ? '★' : '☆';
-            }
-            starToggle.addEventListener("click", (e) => {
-                e.stopPropagation();
-                this.callbacks.onArticleUpdate(article, { starred: !article.starred }, false);
-                starToggle.classList.toggle("starred", !starToggle.classList.contains("starred"));
-                starToggle.classList.toggle("unstarred", !starToggle.classList.contains("unstarred"));
-                const iconEl = starToggle.querySelector('.rss-dashboard-star-icon');
-                if (iconEl) {
-                    setIcon(iconEl as HTMLElement, article.starred ? "lucide-star" : "lucide-star-off");
-                    if (!iconEl.querySelector('svg')) {
-                        iconEl.textContent = article.starred ? '★' : '☆';
-                    }
-                }
-            });
+
+            // Create action buttons using reusable methods
+            const saveButton = this.createSaveButton(article);
+            actionToolbar.appendChild(saveButton);
+
+            const readToggle = this.createReadToggle(article);
+            actionToolbar.appendChild(readToggle);
+
+            const starToggle = this.createStarToggle(article);
+            actionToolbar.appendChild(starToggle);
             
             const tagsDropdown = actionToolbar.createDiv({
                 cls: "rss-dashboard-tags-dropdown",
@@ -930,12 +880,14 @@ export class ArticleList {
             dateEl.setAttribute('title', dateInfo.title);
 
             card.addEventListener("click", () => {
-                this.callbacks.onArticleClick(article);
+                // Always use the latest article data from this.articles
+                const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+                this.callbacks.onArticleClick(latestArticle);
             });
-            
             card.addEventListener("contextmenu", (e) => {
                 e.preventDefault();
-                this.showArticleContextMenu(e, article);
+                const latestArticle = this.articles.find(a => a.guid === article.guid) || article;
+                this.showArticleContextMenu(e, latestArticle);
             });
         }
     }
@@ -1202,6 +1154,129 @@ export class ArticleList {
     updateRefreshButtonText(text: string): void {
         if (this.refreshButton) {
             this.refreshButton.setAttribute('title', text);
+        }
+    }
+
+    /**
+     * Update the UI for a specific article without re-rendering the entire list
+     * @param article The article to update
+     * @param updates The properties that were updated
+     */
+    public updateArticleUI(article: FeedItem, updates: Partial<FeedItem>): void {
+        // First, update the article in this.articles array
+        const index = this.articles.findIndex(a => a.guid === article.guid);
+        if (index !== -1) {
+            this.articles[index] = { ...this.articles[index], ...updates };
+        }
+
+        // Find the article element in the DOM
+        const articleEl = document.getElementById(`article-${article.guid}`);
+        if (!articleEl) return;
+
+        // Update read status
+        if (updates.hasOwnProperty('read')) {
+            const readToggle = articleEl.querySelector('.rss-dashboard-read-toggle');
+            if (readToggle) {
+                readToggle.classList.toggle('read', updates.read);
+                readToggle.classList.toggle('unread', !updates.read);
+                setIcon(readToggle as HTMLElement, updates.read ? 'check-circle' : 'circle');
+            }
+
+            // Update article element class
+            articleEl.classList.toggle('read', updates.read);
+            articleEl.classList.toggle('unread', !updates.read);
+        }
+
+        // Update starred status
+        if (updates.hasOwnProperty('starred')) {
+            const starToggle = articleEl.querySelector('.rss-dashboard-star-toggle');
+            if (starToggle) {
+                starToggle.classList.toggle('starred', updates.starred);
+                starToggle.classList.toggle('unstarred', !updates.starred);
+
+                const iconEl = starToggle.querySelector('.rss-dashboard-star-icon');
+                if (iconEl) {
+                    setIcon(iconEl as HTMLElement, updates.starred ? 'lucide-star' : 'lucide-star-off');
+                    if (!iconEl.querySelector('svg')) {
+                        iconEl.textContent = updates.starred ? '★' : '☆';
+                    }
+                }
+            }
+
+            // Update article element class
+            articleEl.classList.toggle('starred', updates.starred);
+            articleEl.classList.toggle('unstarred', !updates.starred);
+        }
+
+        // Update saved status
+        if (updates.hasOwnProperty('saved')) {
+            const saveButton = articleEl.querySelector('.rss-dashboard-save-toggle');
+            if (saveButton) {
+                // Remove saving class if it exists
+                saveButton.classList.remove('saving');
+
+                if (updates.saved) {
+                    saveButton.classList.add('saved');
+                    saveButton.setAttribute('title', 'Click to open saved article');
+                } else {
+                    saveButton.classList.remove('saved');
+                    saveButton.setAttribute('title', this.settings.articleSaving.saveFullContent
+                        ? 'Save full article content to notes'
+                        : 'Save article summary to notes');
+                }
+            }
+
+            // Update article element class
+            if (updates.saved) {
+                articleEl.classList.add('saved');
+            } else {
+                articleEl.classList.remove('saved');
+            }
+        }
+
+        // Update tags
+        if (updates.hasOwnProperty('tags')) {
+            let tagsContainer = articleEl.querySelector('.rss-dashboard-article-tags') as HTMLElement;
+
+            // If tags container doesn't exist, create it
+            if (!tagsContainer) {
+                const cardContent = articleEl.querySelector('.rss-dashboard-card-content') ||
+                                   articleEl.querySelector('.rss-dashboard-article-content');
+                const actionToolbar = articleEl.querySelector('.rss-dashboard-action-toolbar');
+                if (cardContent && actionToolbar) {
+                    tagsContainer = document.createElement('div');
+                    tagsContainer.className = 'rss-dashboard-article-tags';
+                    cardContent.insertBefore(tagsContainer, actionToolbar);
+                }
+            }
+
+            if (tagsContainer) {
+                // Clear existing tags
+                while (tagsContainer.firstChild) {
+                    tagsContainer.removeChild(tagsContainer.firstChild);
+                }
+
+                // Add new tags
+                if (updates.tags && updates.tags.length > 0) {
+                    const tagsToShow = updates.tags.slice(0, MAX_VISIBLE_TAGS);
+                    tagsToShow.forEach(tag => {
+                        const tagEl = document.createElement('div');
+                        tagEl.className = 'rss-dashboard-article-tag';
+                        tagEl.textContent = tag.name;
+                        tagEl.style.setProperty('--tag-color', tag.color || 'var(--interactive-accent)');
+                        tagsContainer!.appendChild(tagEl);
+                    });
+
+                    // Add overflow indicator if needed
+                    if (updates.tags.length > MAX_VISIBLE_TAGS) {
+                        const overflowTag = document.createElement('div');
+                        overflowTag.className = 'rss-dashboard-tag-overflow';
+                        overflowTag.textContent = `+${updates.tags.length - MAX_VISIBLE_TAGS}`;
+                        overflowTag.title = updates.tags.slice(MAX_VISIBLE_TAGS).map(t => t.name).join(', ');
+                        tagsContainer.appendChild(overflowTag);
+                    }
+                }
+            }
         }
     }
 }
