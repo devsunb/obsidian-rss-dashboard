@@ -782,7 +782,7 @@ export class RssDashboardView extends ItemView {
     
     private async openArticleInNewTab(article: FeedItem): Promise<WorkspaceLeaf> {
         const { workspace } = this.app;
-        const leaf = workspace.getLeaf("split");
+        const leaf = workspace.getLeaf("tab");
         if (leaf) {
             await leaf.setViewState({
                 type: RSS_READER_VIEW_TYPE,
@@ -1136,7 +1136,7 @@ export class RssDashboardView extends ItemView {
     private async openSavedArticleFile(file: TFile): Promise<void> {
         try {
             
-            const leaf = this.app.workspace.getLeaf("split");
+            const leaf = this.app.workspace.getLeaf("tab");
             await leaf.openFile(file);
             this.app.workspace.revealLeaf(leaf);
             
