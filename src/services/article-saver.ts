@@ -152,6 +152,7 @@ guid: "{{guid}}"
     private applyTemplate(item: FeedItem, template: string): string {
         
         const cleanContent = this.cleanHtml(item.description);
+		const markdownContent = this.turndownService.turndown(cleanContent);
         
         
         const formattedDate = new Date(item.pubDate).toLocaleDateString(undefined, {
@@ -181,7 +182,7 @@ guid: "{{guid}}"
             .replace(/{{source}}/g, item.feedTitle)
             .replace(/{{feedTitle}}/g, item.feedTitle)
             .replace(/{{summary}}/g, item.summary || '')
-            .replace(/{{content}}/g, cleanContent)
+            .replace(/{{content}}/g, markdownContent)
             .replace(/{{tags}}/g, tagsString)
             .replace(/{{guid}}/g, item.guid);
     }
@@ -667,4 +668,41 @@ guid: "{{guid}}"
         
         await Promise.all(verificationPromises);
     }
+
+	async checkSavedArticles(articles: FeedItem[]): Promise<void> {
+		await Promise.all(
+			articles
+				.filter((article) => !article.saved)
+				.map((article) => this.checkSavedArticle(article)),
+		);
+	}
+
+	private async checkSavedArticle(article: FeedItem): Promise<void> {
+		const filename = this.sanitizeFilename(article.title);
+		let folder = this.settings.defaultFolder || "";
+		folder = this.normalizePath(folder);
+		const expectedPath =
+			folder && folder.trim() !== ""
+				? `${folder}/${filename}.md`
+				: `${filename}.md`;
+
+		const exists = await this.vault.adapter.exists(expectedPath);
+		if (exists) {
+			article.saved = true;
+			article.savedFilePath = expectedPath;
+
+			if (
+				this.settings.addSavedTag &&
+				(!article.tags ||
+					!article.tags.some((t) => t.name.toLowerCase() === "saved"))
+			) {
+				const savedTag = { name: "saved", color: "#3498db" };
+				if (!article.tags) {
+					article.tags = [savedTag];
+				} else {
+					article.tags.push(savedTag);
+				}
+			}
+		}
+	}
 }

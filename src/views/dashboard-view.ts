@@ -160,7 +160,9 @@ export class RssDashboardView extends ItemView {
     
     
     async render(): Promise<void> {
-        
+        const allArticles = this.getAllArticles();
+        await this.saver.checkSavedArticles(allArticles);
+
         await this.verifySavedArticles();
         
         if (this.articleList) {
